@@ -1,0 +1,780 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Identidad, privacidad y suscripciones
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  USER
+  ADMIN
+  TEACHER
+}
+
+enum AgeGroup {
+  KIDS
+  TEEN
+  ADULT
+  SENIOR
+}
+
+enum ContentStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum SubscriptionStatus {
+  INCOMPLETE
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+enum BillingNotificationType {
+  TRIAL_ENDING
+  RENEWAL_REMINDER
+  PAYMENT_FAILED
+  INVOICE_PAID
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+// Datos personales (nombre real, correo, dirección) solo se exponen en /api/me.
+// Todo lo que ve otro usuario es `publicHandle` + `displayName` público.
+model User {
+  id             String    @id @default(cuid())
+  cognitoSub     String?   @unique
+  email          String    @unique
+  displayName    String
+  publicHandle   String    @unique
+  fullName       String?
+  phone          String?
+  address        String?
+  role           UserRole  @default(USER)
+  ageGroup       AgeGroup?
+  locale         String    @default("es-MX")
+  emailVerified  Boolean   @default(false)
+  commentsBlocked Boolean  @default(false)
+  lastLoginAt    DateTime?
+
+  subscription        Subscription?
+  invoices             Invoice[]
+  placementAttempts    PlacementTestAttempt[]
+  unitProgress         UserUnitProgress[]
+  sectionProgress      UserSectionProgress[]
+  levelBadges          UserLevelBadge[]
+  examAttempts         ExamAttempt[]
+  gameSessions         GameSession[]
+  communityPosts       CommunityPost[]
+  teacherProfile       TeacherProfile?
+  favoriteTeachers     FavoriteTeacher[]
+  appointmentAttendees AppointmentAttendee[]
+  teacherRatingsGiven  TeacherRating[]        @relation("TeacherRatingAuthor")
+  storageObjects       StorageObject[]        @relation("StorageCreatedBy")
+  legalAcceptances     LegalAcceptance[]
+  auditLogs            AuditLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([role])
+  @@map("users")
+}
+
+model Plan {
+  id            String         @id @default(cuid())
+  slug          String         @unique // "basic" ($9/mes) | "pro" ($19/mes: + cine + maestros)
+  name          String
+  description   String?
+  priceAmount   Int // en centavos de USD
+  currency      String         @default("usd")
+  stripePriceId String?        @unique
+  trialDays     Int            @default(7)
+  includesCinema Boolean       @default(false)
+  includesTeachers Boolean     @default(false)
+  isActive      Boolean        @default(true)
+  subscriptions Subscription[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@map("plans")
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  userId               String             @unique
+  planId               String?
+  status               SubscriptionStatus @default(TRIALING)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?            @unique
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  trialEndsAt          DateTime?
+  cancelAtPeriodEnd    Boolean            @default(false)
+  canceledAt           DateTime?
+  cancellationReason   String?
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan                 Plan?              @relation(fields: [planId], references: [id], onDelete: SetNull)
+  notifications        BillingNotification[]
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@index([status])
+  @@index([currentPeriodEnd])
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id              String        @id @default(cuid())
+  userId          String
+  status          InvoiceStatus @default(PENDING)
+  stripeInvoiceId String?       @unique
+  amountPaid      Int?
+  currency        String        @default("usd")
+  paidAt          DateTime?
+  pdfKey          String?
+  errorMessage    String?
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([userId, status])
+  @@map("invoices")
+}
+
+model BillingNotification {
+  id             String                  @id @default(cuid())
+  subscriptionId String
+  type           BillingNotificationType
+  status         NotificationStatus      @default(PENDING)
+  scheduledFor   DateTime
+  sentAt         DateTime?
+  errorMessage   String?
+  subscription   Subscription            @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  createdAt      DateTime                @default(now())
+
+  @@unique([subscriptionId, type, scheduledFor])
+  @@map("billing_notifications")
+}
+
+model LegalAcceptance {
+  id             String   @id @default(cuid())
+  userId         String
+  termsVersion   String
+  privacyVersion String
+  ipAddress      String?
+  userAgent      String?
+  acceptedAt     DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, acceptedAt])
+  @@map("legal_acceptances")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  ipAddress String?
+  userAgent String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}
+
+model StorageObject {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  bucket      String
+  mimeType    String?
+  sizeBytes   Int?
+  createdById String?
+  createdBy   User?    @relation("StorageCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@map("storage_objects")
+}
+
+// ---------------------------------------------------------------------------
+// Currículo: Nivel > Unidad > Sección (Dialogs/Vocabulary/Exercises/
+// Intonation/Pronunciation/Comprehension)
+// ---------------------------------------------------------------------------
+
+enum CourseLevel {
+  BASIC
+  MEDIUM
+  ADVANCED
+}
+
+enum SectionType {
+  DIALOGS
+  VOCABULARY
+  EXERCISES
+  INTONATION
+  PRONUNCIATION
+  COMPREHENSION
+}
+
+enum ExerciseType {
+  SENTENCE_BUILD
+  MULTIPLE_CHOICE
+  FILL_BLANK
+  LISTENING
+  MATCHING
+}
+
+model Level {
+  id     String      @id @default(cuid())
+  slug   CourseLevel @unique
+  name   String
+  order  Int         @unique
+  units  Unit[]
+  exams  Exam[]
+
+  @@map("levels")
+}
+
+model Unit {
+  id       String        @id @default(cuid())
+  levelId  String
+  title    String
+  order    Int
+  status   ContentStatus @default(ACTIVE)
+  level    Level         @relation(fields: [levelId], references: [id], onDelete: Cascade)
+  sections Section[]
+  exams    Exam[]
+  progress UserUnitProgress[]
+
+  @@unique([levelId, order])
+  @@map("units")
+}
+
+model Section {
+  id                String        @id @default(cuid())
+  unitId            String
+  type              SectionType
+  status            ContentStatus @default(ACTIVE)
+  unit              Unit          @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  vocabularyCards   VocabularyCard[]
+  exerciseItems     ExerciseItem[]
+  dialogItems       DialogItem[]
+  intonationItems   IntonationItem[]
+  pronunciationItems PronunciationItem[]
+  comprehensionItems ComprehensionItem[]
+  progress          UserSectionProgress[]
+
+  @@unique([unitId, type])
+  @@map("sections")
+}
+
+model VocabularyCard {
+  id          String        @id @default(cuid())
+  sectionId   String
+  term        String
+  definition  String
+  audioKey    String?
+  imageKey    String?
+  order       Int           @default(0)
+  status      ContentStatus @default(ACTIVE)
+  section     Section       @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([sectionId, order])
+  @@map("vocabulary_cards")
+}
+
+// `prompt`/`choices` en Json para soportar los distintos formatos vistos en
+// los PDFs (construir oración, opción múltiple, etc.) sin migrar el esquema
+// cada vez que se agrega un nuevo tipo de ejercicio.
+model ExerciseItem {
+  id            String        @id @default(cuid())
+  sectionId     String
+  type          ExerciseType
+  prompt        Json
+  choices       Json
+  correctIndex  Int
+  explanation   String?
+  order         Int           @default(0)
+  status        ContentStatus @default(ACTIVE)
+  section       Section       @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([sectionId, order])
+  @@map("exercise_items")
+}
+
+model DialogItem {
+  id         String        @id @default(cuid())
+  sectionId  String
+  speaker    String
+  line       String
+  audioKey   String?
+  order      Int           @default(0)
+  status     ContentStatus @default(ACTIVE)
+  section    Section       @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@index([sectionId, order])
+  @@map("dialog_items")
+}
+
+// Patrón de entonación (pregunta/afirmación, ↗/↘) sobre una frase completa,
+// distinto de PronunciationItem que es la pronunciación IPA de una palabra.
+model IntonationItem {
+  id           String        @id @default(cuid())
+  sectionId    String
+  phrase       String
+  pattern      String // ej. "rising" | "falling"
+  audioKey     String?
+  order        Int           @default(0)
+  status       ContentStatus @default(ACTIVE)
+  section      Section       @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@index([sectionId, order])
+  @@map("intonation_items")
+}
+
+model PronunciationItem {
+  id           String        @id @default(cuid())
+  sectionId    String
+  word         String
+  ipa          String
+  audioKey     String?
+  order        Int           @default(0)
+  status       ContentStatus @default(ACTIVE)
+  section      Section       @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@index([sectionId, order])
+  @@map("pronunciation_items")
+}
+
+model ComprehensionItem {
+  id         String        @id @default(cuid())
+  sectionId  String
+  audioKey   String?
+  question   String
+  choices    Json
+  correctIndex Int
+  order      Int           @default(0)
+  status     ContentStatus @default(ACTIVE)
+  section    Section       @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@index([sectionId, order])
+  @@map("comprehension_items")
+}
+
+// ---------------------------------------------------------------------------
+// Prueba de nivel, exámenes y bitácora
+// ---------------------------------------------------------------------------
+
+model PlacementQuestion {
+  id           String   @id @default(cuid())
+  prompt       String
+  choices      Json
+  correctIndex Int
+  weight       CourseLevel // a qué nivel apunta esta pregunta
+  order        Int      @default(0)
+
+  @@map("placement_questions")
+}
+
+model PlacementTestAttempt {
+  id                String      @id @default(cuid())
+  userId            String
+  answers           Json
+  recommendedLevel  CourseLevel
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt         DateTime    @default(now())
+
+  @@index([userId])
+  @@map("placement_test_attempts")
+}
+
+enum ExamKind {
+  UNIT
+  LEVEL_UP
+}
+
+// Los exámenes se autogeneran a partir del banco de ExerciseItem/
+// VocabularyCard de la unidad (o de todo el nivel para saltos de nivel) y se
+// congelan en `questions` para que la bitácora del usuario sea reproducible
+// aunque el contenido fuente cambie después.
+model Exam {
+  id           String   @id @default(cuid())
+  kind         ExamKind
+  unitId       String?
+  levelId      String?
+  questions    Json
+  totalQuestions Int
+  passingScore Int      @default(7)
+  unit         Unit?    @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  level        Level?   @relation(fields: [levelId], references: [id], onDelete: Cascade)
+  attempts     ExamAttempt[]
+  createdAt    DateTime @default(now())
+
+  @@map("exams")
+}
+
+model ExamAttempt {
+  id          String   @id @default(cuid())
+  examId      String
+  userId      String
+  answers     Json
+  score       Int
+  passed      Boolean
+  exam        Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([examId])
+  @@map("exam_attempts")
+}
+
+// ---------------------------------------------------------------------------
+// Progreso y gamificación
+// ---------------------------------------------------------------------------
+
+model UserUnitProgress {
+  id          String   @id @default(cuid())
+  userId      String
+  unitId      String
+  stars       Int      @default(0) // 0-4, una por sección "principal" completada
+  completedAt DateTime?
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unit        Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, unitId])
+  @@map("user_unit_progress")
+}
+
+model UserSectionProgress {
+  id          String   @id @default(cuid())
+  userId      String
+  sectionId   String
+  completedAt DateTime?
+  score       Int?
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  section     Section  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, sectionId])
+  @@map("user_section_progress")
+}
+
+model UserLevelBadge {
+  id         String      @id @default(cuid())
+  userId     String
+  level      CourseLevel
+  unlockedAt DateTime    @default(now())
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, level])
+  @@map("user_level_badges")
+}
+
+enum GameType {
+  MEMORAMA
+  WORD_SEARCH
+  PUZZLE
+  GUESS_WHO
+}
+
+enum GameOpponent {
+  BOT
+  HUMAN
+}
+
+// `payload` guarda el set de tarjetas/palabras usado en la partida (derivado
+// del vocabulario de la unidad activa del usuario) para poder reconstruir o
+// depurar la sesión sin re-generarla.
+model GameSession {
+  id           String       @id @default(cuid())
+  userId       String
+  gameType     GameType
+  difficulty   CourseLevel
+  opponentType GameOpponent @default(BOT)
+  score        Int          @default(0)
+  wonAt        DateTime?
+  payload      Json?
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime     @default(now())
+
+  @@index([userId, gameType])
+  @@map("game_sessions")
+}
+
+// ---------------------------------------------------------------------------
+// Cine (Plan Pro): streaming solamente, sin descarga, con transcripción
+// pausable palabra por palabra.
+// ---------------------------------------------------------------------------
+
+enum TitleKind {
+  MOVIE
+  SERIES
+}
+
+model Title {
+  id          String    @id @default(cuid())
+  kind        TitleKind
+  name        String
+  description String?
+  ageGroup    AgeGroup?
+  genreTags   String[]
+  status      ContentStatus @default(ACTIVE)
+  episodes    Episode[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("titles")
+}
+
+model Episode {
+  id            String   @id @default(cuid())
+  titleId       String
+  name          String
+  seasonNumber  Int?
+  episodeNumber Int?
+  order         Int      @default(0)
+  title         Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  videoAsset    VideoAsset?
+  subtitleTracks SubtitleTrack[]
+  transcript    TranscriptSegment[]
+
+  @@index([titleId, order])
+  @@map("episodes")
+}
+
+model VideoAsset {
+  id              String   @id @default(cuid())
+  episodeId       String   @unique
+  s3Key           String
+  durationSeconds Int?
+  episode         Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@map("video_assets")
+}
+
+model SubtitleTrack {
+  id         String  @id @default(cuid())
+  episodeId  String
+  language   String  @default("en")
+  vttKey     String
+  episode    Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@unique([episodeId, language])
+  @@map("subtitle_tracks")
+}
+
+model TranscriptSegment {
+  id            String  @id @default(cuid())
+  episodeId     String
+  startMs       Int
+  endMs         Int
+  text          String
+  translationEs String?
+  episode       Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@index([episodeId, startMs])
+  @@map("transcript_segments")
+}
+
+// ---------------------------------------------------------------------------
+// Comunidad: contenido subido por usuarios, moderado antes de publicarse
+// ---------------------------------------------------------------------------
+
+enum CommunityStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model CommunityPost {
+  id         String          @id @default(cuid())
+  authorId   String
+  title      String
+  body       String
+  status     CommunityStatus @default(PENDING)
+  author     User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  exercises  CommunityExercise[]
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@index([status])
+  @@map("community_posts")
+}
+
+model CommunityExercise {
+  id           String        @id @default(cuid())
+  postId       String
+  type         ExerciseType
+  prompt       Json
+  choices      Json
+  correctIndex Int
+  post         CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@map("community_exercises")
+}
+
+// ---------------------------------------------------------------------------
+// Maestros y agenda (Plan Pro)
+// ---------------------------------------------------------------------------
+
+enum Weekday {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CANCELED
+  COMPLETED
+}
+
+enum AttendeeStatus {
+  BOOKED
+  ATTENDED
+  NO_SHOW
+  CANCELED
+}
+
+model TeacherProfile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  bio          String?
+  photoKey     String?
+  ratingAvg    Float    @default(0)
+  ratingCount  Int      @default(0)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  availability TeacherAvailability[]
+  timeOff      TeacherTimeOff[]
+  appointments Appointment[]
+  ratings      TeacherRating[]
+  favoritedBy  FavoriteTeacher[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("teacher_profiles")
+}
+
+// Horario recurrente semanal: un maestro no puede recibir citas fuera de
+// estos rangos, ni en días que no aparezcan aquí.
+model TeacherAvailability {
+  id               String         @id @default(cuid())
+  teacherProfileId String
+  weekday          Weekday
+  startMinute      Int // minutos desde medianoche, ej. 540 = 9:00am
+  endMinute        Int
+  teacherProfile   TeacherProfile @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
+
+  @@index([teacherProfileId, weekday])
+  @@map("teacher_availability")
+}
+
+// Vacaciones/ausencias: bloquea la agenda en ese rango aunque caiga dentro
+// de un TeacherAvailability normal.
+model TeacherTimeOff {
+  id               String         @id @default(cuid())
+  teacherProfileId String
+  startAt          DateTime
+  endAt            DateTime
+  reason           String?
+  teacherProfile   TeacherProfile @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
+
+  @@index([teacherProfileId, startAt])
+  @@map("teacher_time_off")
+}
+
+model Appointment {
+  id               String             @id @default(cuid())
+  teacherProfileId String
+  startAt          DateTime
+  endAt            DateTime
+  capacity         Int                @default(10)
+  status           AppointmentStatus  @default(SCHEDULED)
+  teacherProfile   TeacherProfile     @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
+  attendees        AppointmentAttendee[]
+  ratings          TeacherRating[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([teacherProfileId, startAt])
+  @@map("appointments")
+}
+
+model AppointmentAttendee {
+  id            String         @id @default(cuid())
+  appointmentId String
+  userId        String
+  status        AttendeeStatus @default(BOOKED)
+  appointment   Appointment    @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime       @default(now())
+
+  @@unique([appointmentId, userId])
+  @@map("appointment_attendees")
+}
+
+// Solo se puede calificar si existe un AppointmentAttendee con status
+// ATTENDED del mismo usuario para ese maestro (ver lib/permissions.js
+// canRateTeacher). `User.commentsBlocked` corta el abuso sin borrar cuentas.
+model TeacherRating {
+  id               String         @id @default(cuid())
+  teacherProfileId String
+  appointmentId    String
+  authorId         String
+  score            Int
+  comment          String?
+  teacherProfile   TeacherProfile @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
+  appointment      Appointment    @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  author           User           @relation("TeacherRatingAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt        DateTime       @default(now())
+
+  @@unique([appointmentId, authorId])
+  @@index([teacherProfileId])
+  @@map("teacher_ratings")
+}
+
+model FavoriteTeacher {
+  id               String         @id @default(cuid())
+  userId           String
+  teacherProfileId String
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teacherProfile   TeacherProfile @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
+  createdAt        DateTime       @default(now())
+
+  @@unique([userId, teacherProfileId])
+  @@map("favorite_teachers")
+}

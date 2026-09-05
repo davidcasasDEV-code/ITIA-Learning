@@ -1,0 +1,87 @@
+@import "tailwindcss";
+
+:root {
+  /* Paleta viva e inspirada en los 6 pilares del curso: Dialogs/Intonation en
+     azul, Vocabulary/Pronunciation en rosa, Exercises/Comprehension en verde. */
+  --brand-blue: #2e9bff;
+  --brand-blue-deep: #0f6fe0;
+  --brand-pink: #ff3d8f;
+  --brand-pink-deep: #e0176c;
+  --brand-green: #22c55e;
+  --brand-green-deep: #16a34a;
+  --brand-yellow: #ffc93d;
+  --brand-purple: #8b5cf6;
+  --brand-purple-deep: #6d28d9;
+
+  --neutral-0: #ffffff;
+  --neutral-25: #fbfcfe;
+  --neutral-50: #f5f7fb;
+  --neutral-100: #edf1f7;
+  --neutral-200: #dce3ed;
+  --neutral-300: #c2ccdb;
+  --neutral-400: #7e8ca3;
+  --neutral-500: #647189;
+  --neutral-600: #475067;
+  --neutral-700: #323a4d;
+  --neutral-800: #1d2333;
+  --neutral-900: #11151f;
+
+  --gradient-hero: linear-gradient(120deg, var(--brand-blue) 0%, var(--brand-purple) 55%, var(--brand-pink) 100%);
+  --gradient-cta: linear-gradient(120deg, var(--brand-pink) 0%, var(--brand-purple) 100%);
+  --gradient-pro: linear-gradient(120deg, var(--brand-purple) 0%, var(--brand-blue-deep) 100%);
+
+  --background: var(--neutral-50);
+  --foreground: var(--neutral-900);
+  --surface: var(--neutral-0);
+  --surface-muted: var(--neutral-25);
+  --border: var(--neutral-200);
+  --shadow-card: 0 8px 24px rgba(29, 35, 51, 0.08);
+  --shadow-lift: 0 14px 32px rgba(46, 155, 255, 0.24);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Nunito", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+  margin: 0;
+  overflow-x: hidden;
+}
+
+button,
+select,
+input,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid rgba(46, 155, 255, 0.4);
+  outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+  .itia-hide-mobile {
+    display: none !important;
+  }
+
+  .itia-stack-mobile {
+    flex-direction: column !important;
+  }
+
+  .itia-grid-1-mobile {
+    grid-template-columns: 1fr !important;
+  }
+}
