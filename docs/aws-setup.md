@@ -5,6 +5,14 @@ acompañe) cree los recursos reales en la cuenta de AWS cuando decida
 desplegar. Ninguno de estos pasos se hizo durante el desarrollo de este
 repositorio.
 
+**Estado actual del deploy en Amplify:** el build compila y el sitio se ve
+(landing, `/planes`, etc.) aunque ninguna variable de Cognito/S3/SES/Stripe
+esté configurada todavía — `amplify.yml` solo avisa si faltan, no falla el
+build. Pero **login, signup y todo lo que dependa de una sesión (`/dashboard`,
+`/learn`, `/admin`, checkout de Stripe) no funcionará** hasta que sigas los
+pasos de este documento y agregues esas variables en Amplify → App settings →
+Environment variables.
+
 ## 1. Base del proyecto
 
 1. Usa Node.js 22 y npm.

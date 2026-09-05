@@ -9,13 +9,13 @@ frontend:
     build:
       commands:
         - rm -f .env.production
-        - test -n "$COGNITO_USER_POOL_ID" || (echo "Missing COGNITO_USER_POOL_ID" && exit 1)
-        - test -n "$INVITATION_TOKEN_SECRET" || (echo "Missing INVITATION_TOKEN_SECRET" && exit 1)
-        - test ${#INVITATION_TOKEN_SECRET} -ge 32 || (echo "INVITATION_TOKEN_SECRET must be at least 32 characters" && exit 1)
-        - echo "$COGNITO_USER_POOL_ID" | grep -Eq '^[-a-z0-9]+_[A-Za-z0-9]+$' || (echo "Invalid COGNITO_USER_POOL_ID format. Expected value like us-east-1_6bUT7rQUz, got $COGNITO_USER_POOL_ID" && exit 1)
-        - env | grep -e APP_ENV -e APP_BASE_URL -e APP_SESSION_COOKIE -e APP_REFRESH_COOKIE -e AWS_REGION -e DATABASE_URL -e RDS_CA_BUNDLE_PATH -e COGNITO_ -e INVITATION_TOKEN_SECRET -e S3_ -e SES_ -e STRIPE_ >> .env.production
-        - grep -E '^COGNITO_USER_POOL_ID=' .env.production
-        - grep -E '^INVITATION_TOKEN_SECRET=' .env.production > /dev/null
+        # Cognito/S3/SES/Stripe todavía no están provisionados (ver
+        # docs/aws-setup.md) — el build no debe fallar por eso, solo avisa.
+        # Login/signup no funcionarán hasta que COGNITO_USER_POOL_ID esté
+        # configurado en las variables de entorno de Amplify.
+        - if [ -n "$COGNITO_USER_POOL_ID" ]; then echo "$COGNITO_USER_POOL_ID" | grep -Eq '^[-a-z0-9]+_[A-Za-z0-9]+$' || (echo "Invalid COGNITO_USER_POOL_ID format. Expected value like us-east-1_6bUT7rQUz, got $COGNITO_USER_POOL_ID" && exit 1); else echo "COGNITO_USER_POOL_ID not set yet - login/signup will not work until it is configured (see docs/aws-setup.md)."; fi
+        - if [ -n "$INVITATION_TOKEN_SECRET" ]; then test ${#INVITATION_TOKEN_SECRET} -ge 32 || (echo "INVITATION_TOKEN_SECRET must be at least 32 characters" && exit 1); else echo "INVITATION_TOKEN_SECRET not set yet - teacher invitation links will not work until it is configured (see docs/aws-setup.md)."; fi
+        - env | grep -e APP_ENV -e APP_BASE_URL -e APP_SESSION_COOKIE -e APP_REFRESH_COOKIE -e AWS_REGION -e DATABASE_URL -e RDS_CA_BUNDLE_PATH -e COGNITO_ -e INVITATION_TOKEN_SECRET -e S3_ -e SES_ -e STRIPE_ >> .env.production || true
         - npm run build
   artifacts:
     baseDirectory: .next
