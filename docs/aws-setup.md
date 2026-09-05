@@ -13,6 +13,17 @@ build. Pero **login, signup y todo lo que dependa de una sesión (`/dashboard`,
 pasos de este documento y agregues esas variables en Amplify → App settings →
 Environment variables.
 
+**Para ver el contenido YA, sin Cognito:** agrega `DEMO_MODE=true` como
+variable de entorno (local o en Amplify) — ver `.env.example`. Con eso puedes
+entrar directo a `/dashboard`, `/learn/...` y `/admin` como un único usuario
+de demostración, sin ningún login real. **Mientras `DEMO_MODE=true` esté
+activo, el sitio no tiene autenticación real** — cualquiera que entre a la
+URL pública ve/usa la misma sesión de demo. Quita esa variable (o ponla en
+`false`) apenas termines de configurar Cognito en esta guía. Sigue
+necesitando un `DATABASE_URL` real y alcanzable (Postgres) para que el
+contenido cargue — `DEMO_MODE` solo salta la verificación de sesión, no
+reemplaza la base de datos.
+
 ## 1. Base del proyecto
 
 1. Usa Node.js 22 y npm.

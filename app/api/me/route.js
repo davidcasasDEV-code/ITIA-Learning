@@ -33,6 +33,7 @@ export async function GET(req) {
     const totalStars = unitProgress.reduce((sum, item) => sum + item.stars, 0);
 
     return Response.json({
+      demoMode: ctx.demoMode,
       user: {
         id: ctx.user.id,
         publicHandle: ctx.user.publicHandle,

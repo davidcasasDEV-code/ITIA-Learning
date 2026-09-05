@@ -9,6 +9,7 @@ const ERROR_MESSAGES = {
 export default async function LoginPage({ searchParams }) {
   const params = (await searchParams) || {};
   const error = params?.error;
+  const demoMode = process.env.DEMO_MODE === "true";
 
   return (
     <main
@@ -44,12 +45,36 @@ export default async function LoginPage({ searchParams }) {
             </div>
           )}
 
-          <a href="/api/auth/login" style={{ display: "block", marginBottom: 12 }}>
-            <Btn full size="lg">Iniciar sesión</Btn>
-          </a>
-          <a href="/api/auth/signup" style={{ display: "block" }}>
-            <Btn full size="lg" variant="outline">Crear cuenta (7 días gratis)</Btn>
-          </a>
+          {demoMode ? (
+            <>
+              <div
+                style={{
+                  background: "#fffbeb",
+                  color: "#92400e",
+                  borderRadius: 12,
+                  padding: 12,
+                  marginBottom: 18,
+                  fontSize: 13,
+                  textAlign: "left",
+                }}
+              >
+                ⚠️ DEMO_MODE está activo: el login real de Cognito está desactivado y todos entran
+                como el mismo usuario de demostración.
+              </div>
+              <a href="/dashboard" style={{ display: "block" }}>
+                <Btn full size="lg">Entrar en modo demo</Btn>
+              </a>
+            </>
+          ) : (
+            <>
+              <a href="/api/auth/login" style={{ display: "block", marginBottom: 12 }}>
+                <Btn full size="lg">Iniciar sesión</Btn>
+              </a>
+              <a href="/api/auth/signup" style={{ display: "block" }}>
+                <Btn full size="lg" variant="outline">Crear cuenta (7 días gratis)</Btn>
+              </a>
+            </>
+          )}
         </Card>
       </Container>
     </main>

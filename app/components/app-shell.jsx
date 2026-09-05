@@ -9,6 +9,21 @@ export function AppShell({ me, children }) {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--background)" }}>
+      {me?.demoMode && (
+        <div
+          style={{
+            background: "#111827",
+            color: "#fde68a",
+            textAlign: "center",
+            fontSize: 13,
+            fontWeight: 700,
+            padding: "6px 12px",
+          }}
+        >
+          ⚠️ DEMO_MODE activo: no hay login real, todos ven la sesión de "{me.user?.publicHandle}". Quita
+          DEMO_MODE de las variables de entorno antes de invitar usuarios de verdad.
+        </div>
+      )}
       <header style={{ borderBottom: `1px solid ${COLORS.border}`, background: COLORS.surface }}>
         <Container style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 64 }}>
           <Link href="/dashboard" style={{ textDecoration: "none", fontWeight: 900, fontSize: 20, color: COLORS.blue }}>
